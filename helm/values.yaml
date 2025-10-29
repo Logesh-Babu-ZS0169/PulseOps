@@ -1,0 +1,82 @@
+replicaCount:
+  backend: 2
+  frontend: 2
+
+image:
+  registry: your-registry.com
+  backend:
+    repository: metrics-dashboard-backend
+    tag: latest
+    pullPolicy: Always
+  frontend:
+    repository: metrics-dashboard-frontend
+    tag: latest
+    pullPolicy: Always
+
+imagePullSecrets: []
+
+namespace: metrics-dashboard
+
+backend:
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  service:
+    type: ClusterIP
+    port: 8181
+
+frontend:
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+  service:
+    type: ClusterIP
+    port: 5000
+
+database:
+  host: "192.168.10.248"
+  port: "5432"
+  name: "inticsdev"
+  username: "postgres"
+  # password should be set via secrets
+
+email:
+  host: "smtp.gmail.com"
+  port: "587"
+  to: "logesh.babu@intics.ai"
+  # username and password should be set via secrets
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: metrics-dashboard.yourdomain.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /
+          pathType: Prefix
+          service: frontend
+  tls:
+    - secretName: metrics-dashboard-tls
+      hosts:
+        - metrics-dashboard.yourdomain.com
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80

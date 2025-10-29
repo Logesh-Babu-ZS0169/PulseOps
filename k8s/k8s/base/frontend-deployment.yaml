@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-dashboard-frontend
+  namespace: bronze
+  labels:
+    app: metrics-dashboard
+    component: frontend
+    version: v1.0.0
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: metrics-dashboard
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: metrics-dashboard
+        component: frontend
+        version: v1.0.0
+    spec:
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - name: frontend
+        image: zsubscription/ingestionmetrics-frontend:4.4
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: metrics-dashboard-config
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      restartPolicy: Always

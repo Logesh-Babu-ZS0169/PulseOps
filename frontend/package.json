@@ -1,0 +1,36 @@
+{
+  "name": "inbound-metrics-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 5000 -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start -p 5000 -H 0.0.0.0",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^5.18.0",
+    "@mui/material": "^5.18.0",
+    "@mui/material-nextjs": "^7.3.3",
+    "@mui/styles": "^5.18.0",
+    "@mui/x-date-pickers": "^5.0.20",
+    "@mui/x-tree-view": "^7.29.10",
+    "axios": "^1.6.0",
+    "dayjs": "^1.11.18",
+    "next": "^15.5.5",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "recharts": "^2.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.3.1",
+    "@types/react": "18.2.14",
+    "@types/react-dom": "18.2.6",
+    "autoprefixer": "10.4.14",
+    "postcss": "^8.5.6",
+    "tailwindcss": "3.3.2",
+    "typescript": "5.1.3"
+  }
+}

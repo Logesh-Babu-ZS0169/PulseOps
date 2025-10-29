@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-dashboard-backend
+  namespace: bronze
+  labels:
+    app: metrics-dashboard
+    component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: metrics-dashboard
+    component: backend
+  ports:
+  - name: http
+    port: 8181
+    targetPort: 8181
+    protocol: TCP
+  sessionAffinity: None

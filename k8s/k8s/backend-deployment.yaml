@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-dashboard-backend
+  namespace: bronze
+  labels:
+    app: metrics-dashboard
+    component: backend
+    version: v1.0.0
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: metrics-dashboard
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: metrics-dashboard
+        component: backend
+        version: v1.0.0
+    spec:
+      serviceAccountName: metrics-dashboard-backend   # <-- must be here
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - name: backend
+        image: zsubscription/ingestionmetrics-backend:1.10.3
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8181
+          name: http
+          protocol: TCP
+        envFrom:
+        - configMapRef:
+            name: metrics-dashboard-config
+        - secretRef:
+            name: metrics-dashboard-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8181
+          initialDelaySeconds: 20   # more time for Spring Boot to start fully
+          periodSeconds: 10
+          timeoutSeconds: 5      # give more time for response
+          failureThreshold: 5       # allow more retries
+      restartPolicy: Always

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-dashboard-frontend
+  namespace: bronze
+  labels:
+    app: metrics-dashboard
+    component: frontend
+spec:
+  type: ClusterIP
+  selector:
+    app: metrics-dashboard
+    component: frontend
+  ports:
+  - name: http
+    port: 5000
+    targetPort: 5000
+    protocol: TCP
+  sessionAffinity: None
