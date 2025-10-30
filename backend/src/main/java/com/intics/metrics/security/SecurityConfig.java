@@ -31,21 +31,23 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .cors().and()
-            .csrf().disable()
-            .sessionManagement()
+                .cors().and()
+                .csrf().disable()
+                .sessionManagement()
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            .and()
-            .authorizeRequests()
+                .and()
+                .authorizeRequests()
                 // Public endpoints - no authentication required
                 .antMatchers("/api/auth/login", "/api/auth/signup").permitAll()
                 .antMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 .antMatchers("/actuator/health").permitAll()
-                .antMatchers("/api/kubernetes/pods").permitAll()
+                .antMatchers("/api/kubernetes/**").permitAll()
+
+
                 // All other endpoints require JWT authentication
                 .anyRequest().authenticated()
-            .and()
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .and()
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

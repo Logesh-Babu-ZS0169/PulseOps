@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  basePath: '/kronos-studio',
   async redirects() {
     return [
       {

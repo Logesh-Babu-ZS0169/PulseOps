@@ -1,6 +1,7 @@
 package com.intics.metrics.service;
 
 import com.intics.metrics.dto.kubernetes.*;
+import com.intics.metrics.dto.kubernetes.logs.*;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
@@ -10,10 +11,15 @@ import org.joda.time.DateTime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
+import java.io.StringReader;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,7 +40,7 @@ public class KubernetesService {
         if (coreV1Api == null) {
             throw new IllegalStateException("Kubernetes CoreV1Api not initialized");
         }
-        
+
         try {
             // Limit to 1 namespace to verify API connectivity
             coreV1Api.listNamespace(null, null, null, null, null, 1, null, null, null, null);
@@ -62,12 +68,12 @@ public class KubernetesService {
                     .map(pod -> convertToPodMetricsDTO(pod))
                     .collect(Collectors.toList());
         } catch (ApiException e) {
-            log.error("Error fetching pods - HTTP Status: {}, Response Body: {}, Message: {}", 
-                     e.getCode(), e.getResponseBody(), e.getMessage(), e);
+            log.error("Error fetching pods - HTTP Status: {}, Response Body: {}, Message: {}",
+                    e.getCode(), e.getResponseBody(), e.getMessage(), e);
             throw new RuntimeException(String.format(
-                "Failed to fetch pods from Kubernetes - HTTP %d: %s", 
-                e.getCode(), 
-                e.getResponseBody() != null ? e.getResponseBody() : e.getMessage()), e);
+                    "Failed to fetch pods from Kubernetes - HTTP %d: %s",
+                    e.getCode(),
+                    e.getResponseBody() != null ? e.getResponseBody() : e.getMessage()), e);
         }
     }
 
@@ -84,12 +90,12 @@ public class KubernetesService {
                     .map(node -> convertToNodeMetricsDTO(node))
                     .collect(Collectors.toList());
         } catch (ApiException e) {
-            log.error("Error fetching nodes - HTTP Status: {}, Response Body: {}, Message: {}", 
-                     e.getCode(), e.getResponseBody(), e.getMessage(), e);
+            log.error("Error fetching nodes - HTTP Status: {}, Response Body: {}, Message: {}",
+                    e.getCode(), e.getResponseBody(), e.getMessage(), e);
             throw new RuntimeException(String.format(
-                "Failed to fetch nodes from Kubernetes - HTTP %d: %s", 
-                e.getCode(), 
-                e.getResponseBody() != null ? e.getResponseBody() : e.getMessage()), e);
+                    "Failed to fetch nodes from Kubernetes - HTTP %d: %s",
+                    e.getCode(),
+                    e.getResponseBody() != null ? e.getResponseBody() : e.getMessage()), e);
         }
     }
 
@@ -106,12 +112,12 @@ public class KubernetesService {
                     .map(this::convertToNamespaceDTO)
                     .collect(Collectors.toList());
         } catch (ApiException e) {
-            log.error("Error fetching namespaces - HTTP Status: {}, Response Body: {}, Message: {}", 
-                     e.getCode(), e.getResponseBody(), e.getMessage(), e);
+            log.error("Error fetching namespaces - HTTP Status: {}, Response Body: {}, Message: {}",
+                    e.getCode(), e.getResponseBody(), e.getMessage(), e);
             throw new RuntimeException(String.format(
-                "Failed to fetch namespaces from Kubernetes - HTTP %d: %s", 
-                e.getCode(), 
-                e.getResponseBody() != null ? e.getResponseBody() : e.getMessage()), e);
+                    "Failed to fetch namespaces from Kubernetes - HTTP %d: %s",
+                    e.getCode(),
+                    e.getResponseBody() != null ? e.getResponseBody() : e.getMessage()), e);
         }
     }
 
@@ -150,12 +156,12 @@ public class KubernetesService {
                     .podsByNamespace(podsByNamespace)
                     .build();
         } catch (ApiException e) {
-            log.error("Error fetching cluster overview - HTTP Status: {}, Response Body: {}, Message: {}", 
-                     e.getCode(), e.getResponseBody(), e.getMessage(), e);
+            log.error("Error fetching cluster overview - HTTP Status: {}, Response Body: {}, Message: {}",
+                    e.getCode(), e.getResponseBody(), e.getMessage(), e);
             throw new RuntimeException(String.format(
-                "Failed to fetch cluster overview from Kubernetes - HTTP %d: %s", 
-                e.getCode(), 
-                e.getResponseBody() != null ? e.getResponseBody() : e.getMessage()), e);
+                    "Failed to fetch cluster overview from Kubernetes - HTTP %d: %s",
+                    e.getCode(),
+                    e.getResponseBody() != null ? e.getResponseBody() : e.getMessage()), e);
         }
     }
 
@@ -333,11 +339,11 @@ public class KubernetesService {
     private PodMetricsDTO.ResourceMetrics extractResourcesFromPod(V1Pod pod) {
         // Extract resource requests and limits from containers
         PodMetricsDTO.ResourceMetrics.ResourceMetricsBuilder builder = PodMetricsDTO.ResourceMetrics.builder();
-        
+
         if (pod.getSpec() != null && pod.getSpec().getContainers() != null && !pod.getSpec().getContainers().isEmpty()) {
             V1Container firstContainer = pod.getSpec().getContainers().get(0);
             V1ResourceRequirements resources = firstContainer.getResources();
-            
+
             if (resources != null) {
                 // Extract requests
                 if (resources.getRequests() != null) {
@@ -348,7 +354,7 @@ public class KubernetesService {
                         builder.memoryRequest(resources.getRequests().get("memory").toSuffixedString());
                     }
                 }
-                
+
                 // Extract limits
                 if (resources.getLimits() != null) {
                     if (resources.getLimits().containsKey("cpu")) {
@@ -360,10 +366,236 @@ public class KubernetesService {
                 }
             }
         }
-        
+
         return builder
                 .cpuUsage("N/A")  // Will be available with metrics server
                 .memoryUsage("N/A")
+                .build();
+    }
+
+    public LogSearchResultDTO getPodLogs(PodLogRequestDTO request) {
+        if (coreV1Api == null) {
+            log.error("Kubernetes CoreV1Api not initialized");
+            throw new IllegalStateException("Kubernetes client not initialized. Please configure kubeconfig.");
+        }
+
+        try {
+            String namespace = request.getNamespace();
+            String podName = request.getPodName();
+            String containerName = request.getContainerName();
+            Integer tailLines = request.getTailLines() != null ? request.getTailLines() : 1000;
+            Integer sinceSeconds = request.getSinceSeconds() != null ? request.getSinceSeconds() : 3600;
+            Boolean timestamps = request.getTimestamps() != null ? request.getTimestamps() : true;
+
+            String logs = coreV1Api.readNamespacedPodLog(
+                    podName,
+                    namespace,
+                    containerName,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    sinceSeconds,
+                    tailLines,
+                    timestamps
+            );
+
+            List<LogEntryDTO> logEntries = parseLogLines(logs, namespace, podName, containerName);
+
+            if (request.getSearchTerm() != null && !request.getSearchTerm().isEmpty()) {
+                logEntries = logEntries.stream()
+                        .filter(log -> log.getMessage().toLowerCase().contains(request.getSearchTerm().toLowerCase()))
+                        .collect(Collectors.toList());
+            }
+
+            if (request.getLogLevel() != null && !request.getLogLevel().equals("ALL")) {
+                logEntries = logEntries.stream()
+                        .filter(log -> request.getLogLevel().equals(log.getLogLevel()))
+                        .collect(Collectors.toList());
+            }
+
+            return buildLogSearchResult(logEntries, request.getSearchTerm(), String.format("Last %d seconds", sinceSeconds));
+
+        } catch (ApiException e) {
+            log.error("Error fetching pod logs - HTTP Status: {}, Response Body: {}",
+                    e.getCode(), e.getMessage(), e);
+            throw new RuntimeException(String.format(
+                    "Failed to fetch pod logs from Kubernetes - HTTP %d: %s",
+                    e.getCode(),
+                    e.getMessage()), e);
+        }
+    }
+
+    public LogSearchResultDTO searchLogsAcrossNamespace(String namespace, String searchTerm, String logLevel, Integer sinceSeconds) {
+        if (coreV1Api == null) {
+            log.error("Kubernetes CoreV1Api not initialized");
+            throw new IllegalStateException("Kubernetes client not initialized. Please configure kubeconfig.");
+        }
+
+        List<LogEntryDTO> allLogs = new ArrayList<>();
+
+        try {
+            List<PodMetricsDTO> pods = getAllPods(namespace);
+
+            for (PodMetricsDTO pod : pods) {
+                try {
+                    PodLogRequestDTO request = PodLogRequestDTO.builder()
+                            .namespace(pod.getNamespace())
+                            .podName(pod.getName())
+                            .tailLines(500)
+                            .sinceSeconds(sinceSeconds != null ? sinceSeconds : 3600)
+                            .timestamps(true)
+                            .searchTerm(searchTerm)
+                            .logLevel(logLevel)
+                            .build();
+
+                    LogSearchResultDTO podLogs = getPodLogs(request);
+                    allLogs.addAll(podLogs.getLogs());
+                } catch (Exception e) {
+                    log.debug("Could not fetch logs for pod {}: {}", pod.getName(), e.getMessage());
+                }
+            }
+
+            allLogs.sort(Comparator.comparing(LogEntryDTO::getTimestamp).reversed());
+
+            return buildLogSearchResult(allLogs, searchTerm, String.format("Last %d seconds", sinceSeconds != null ? sinceSeconds : 3600));
+
+        } catch (Exception e) {
+            log.error("Error searching logs across namespace: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to search logs: " + e.getMessage(), e);
+        }
+    }
+
+    public LogStatisticsDTO getLogStatistics(String namespace, Integer sinceSeconds) {
+        if (coreV1Api == null) {
+            log.error("Kubernetes CoreV1Api not initialized");
+            throw new IllegalStateException("Kubernetes client not initialized. Please configure kubeconfig.");
+        }
+
+        LogSearchResultDTO allLogs = searchLogsAcrossNamespace(namespace, null, "ALL", sinceSeconds);
+
+        Map<String, Integer> errorsByPod = allLogs.getLogs().stream()
+                .filter(log -> "ERROR".equals(log.getLogLevel()))
+                .collect(Collectors.groupingBy(
+                        LogEntryDTO::getPodName,
+                        Collectors.collectingAndThen(Collectors.counting(), Long::intValue)
+                ));
+
+        int errorCount = allLogs.getLogLevelCounts().getOrDefault("ERROR", 0);
+        int warningCount = allLogs.getLogLevelCounts().getOrDefault("WARN", 0);
+        int infoCount = allLogs.getLogLevelCounts().getOrDefault("INFO", 0);
+
+        return LogStatisticsDTO.builder()
+                .totalLogs(allLogs.getTotalCount())
+                .logsByLevel(allLogs.getLogLevelCounts())
+                .logsByNamespace(allLogs.getNamespaceCounts())
+                .logsByPod(allLogs.getPodCounts())
+                .errorsByPod(errorsByPod)
+                .errorCount(errorCount)
+                .warningCount(warningCount)
+                .infoCount(infoCount)
+                .timeRange(String.format("Last %d seconds", sinceSeconds != null ? sinceSeconds : 3600))
+                .build();
+    }
+
+    private List<LogEntryDTO> parseLogLines(String logs, String namespace, String podName, String containerName) {
+        List<LogEntryDTO> logEntries = new ArrayList<>();
+
+        if (logs == null || logs.isEmpty()) {
+            return logEntries;
+        }
+
+        try (BufferedReader reader = new BufferedReader(new StringReader(logs))) {
+            String line;
+            int lineNumber = 1;
+
+            while ((line = reader.readLine()) != null) {
+                LogEntryDTO logEntry = parseLogLine(line, namespace, podName, containerName, lineNumber);
+                logEntries.add(logEntry);
+                lineNumber++;
+            }
+        } catch (Exception e) {
+            log.error("Error parsing log lines: {}", e.getMessage(), e);
+        }
+
+        return logEntries;
+    }
+
+    private LogEntryDTO parseLogLine(String line, String namespace, String podName, String containerName, int lineNumber) {
+        String timestamp = extractTimestamp(line);
+        String logLevel = extractLogLevel(line);
+        String message = line;
+
+        if (timestamp != null) {
+            message = line.substring(timestamp.length()).trim();
+        }
+
+        return LogEntryDTO.builder()
+                .timestamp(timestamp != null ? timestamp : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                .podName(podName)
+                .namespace(namespace)
+                .containerName(containerName)
+                .logLevel(logLevel)
+                .message(message)
+                .lineNumber(lineNumber)
+                .build();
+    }
+
+    private String extractTimestamp(String line) {
+        Pattern timestampPattern = Pattern.compile("^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d+Z|\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})");
+        Matcher matcher = timestampPattern.matcher(line);
+
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+
+        return null;
+    }
+
+    private String extractLogLevel(String line) {
+        String upperLine = line.toUpperCase();
+
+        if (upperLine.contains("ERROR") || upperLine.contains("FATAL") || upperLine.contains("SEVERE")) {
+            return "ERROR";
+        } else if (upperLine.contains("WARN") || upperLine.contains("WARNING")) {
+            return "WARN";
+        } else if (upperLine.contains("INFO")) {
+            return "INFO";
+        } else if (upperLine.contains("DEBUG") || upperLine.contains("TRACE")) {
+            return "DEBUG";
+        }
+
+        return "INFO";
+    }
+
+    private LogSearchResultDTO buildLogSearchResult(List<LogEntryDTO> logs, String searchQuery, String timeRange) {
+        Map<String, Integer> logLevelCounts = logs.stream()
+                .collect(Collectors.groupingBy(
+                        LogEntryDTO::getLogLevel,
+                        Collectors.collectingAndThen(Collectors.counting(), Long::intValue)
+                ));
+
+        Map<String, Integer> namespaceCounts = logs.stream()
+                .collect(Collectors.groupingBy(
+                        LogEntryDTO::getNamespace,
+                        Collectors.collectingAndThen(Collectors.counting(), Long::intValue)
+                ));
+
+        Map<String, Integer> podCounts = logs.stream()
+                .collect(Collectors.groupingBy(
+                        LogEntryDTO::getPodName,
+                        Collectors.collectingAndThen(Collectors.counting(), Long::intValue)
+                ));
+
+        return LogSearchResultDTO.builder()
+                .logs(logs)
+                .totalCount(logs.size())
+                .logLevelCounts(logLevelCounts)
+                .namespaceCounts(namespaceCounts)
+                .podCounts(podCounts)
+                .searchQuery(searchQuery)
+                .timeRange(timeRange)
                 .build();
     }
 }

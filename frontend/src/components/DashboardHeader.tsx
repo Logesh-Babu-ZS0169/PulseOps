@@ -16,6 +16,8 @@ import { AccountCircle, ExitToApp, Security } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import K8sNavigationButton from '@/components/K8sNavigationButton';
+import K8sLogsNavigationButton from '@/components/K8sLogsNavigationButton';
+import MetricsNavigationButton from '@/components/MetricsNavigationButton';
 
 export default function DashboardHeader() {
   const { user, logout } = useAuth();
@@ -56,6 +58,8 @@ export default function DashboardHeader() {
         {user && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <K8sNavigationButton />
+            <K8sLogsNavigationButton />
+            <MetricsNavigationButton />
             <Typography variant="body2">
               {user.fullName || user.username}
             </Typography>

@@ -74,7 +74,7 @@ export default function SignupPage() {
       });
 
       // Redirect to dashboard
-      router.push('/');
+      router.push('/kronos');
     } catch (err: any) {
       setError(err.message || 'An error occurred during signup');
     } finally {

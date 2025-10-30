@@ -69,7 +69,7 @@ export default function LoginPage() {
       });
 
       // Redirect to dashboard
-      router.push('/');
+      router.push('/kronos');
     } catch (err: any) {
       setError(err.message || 'An error occurred during login');
     } finally {
