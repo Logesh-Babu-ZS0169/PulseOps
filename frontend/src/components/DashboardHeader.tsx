@@ -14,14 +14,18 @@ import {
 } from '@mui/material';
 import { AccountCircle, ExitToApp, Security } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import K8sNavigationButton from '@/components/K8sNavigationButton';
 import K8sLogsNavigationButton from '@/components/K8sLogsNavigationButton';
 import MetricsNavigationButton from '@/components/MetricsNavigationButton';
+import DatabaseNavigationButton from '@/components/DatabaseNavigationButton';
+import DatabaseAnalyticsNavigationButton from '@/components/DatabaseAnalyticsNavigationButton';
+import PostgresOptimizerNavigationButton from '@/components/PostgresOptimizerNavigationButton';
 
 export default function DashboardHeader() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
 
   const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -58,8 +62,23 @@ export default function DashboardHeader() {
         {user && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <K8sNavigationButton />
-            <K8sLogsNavigationButton />
-            <MetricsNavigationButton />
+            {pathname !== '/kubernetes' && (
+              <>
+                <K8sLogsNavigationButton />
+                <MetricsNavigationButton />
+              </>
+            )}
+            {pathname !== '/kubernetes' && 
+             pathname !== '/metrics' && 
+             pathname !== '/k8s-logs' && (
+              <DatabaseNavigationButton />
+            )}
+            {pathname === '/database' && (
+              <>
+                <DatabaseAnalyticsNavigationButton />
+                <PostgresOptimizerNavigationButton />
+              </>
+            )}
             <Typography variant="body2">
               {user.fullName || user.username}
             </Typography>

@@ -42,8 +42,6 @@ public class SecurityConfig {
                 .antMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 .antMatchers("/actuator/health").permitAll()
                 .antMatchers("/api/kubernetes/**").permitAll()
-
-
                 // All other endpoints require JWT authentication
                 .anyRequest().authenticated()
                 .and()

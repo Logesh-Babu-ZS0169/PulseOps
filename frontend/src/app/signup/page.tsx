@@ -17,7 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 import { useConfig } from '@/hooks/useConfig';
 
-const config = useConfig()
+
 
 export default function SignupPage() {
   const router = useRouter();
@@ -41,6 +41,9 @@ export default function SignupPage() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8181';
   
   const handleSubmit = async (e: React.FormEvent) => {
+
+    const config = useConfig()
+    
     e.preventDefault();
     setLoading(true);
     setError('');
